@@ -8,12 +8,12 @@ import pyrr
 from pyrr import Quaternion, Matrix33, Matrix44, Vector4
 from PIL import Image
 
-
 def main():
     if not glfw.init():
         return
     _width = 600
     _height = 600
+    _aspect = _width / _height
     window = glfw.create_window(_width, _height, "Pyopengl Perspective Projection", None, None)
 
     if not window:
@@ -77,21 +77,18 @@ def main():
 
               uniform mat4 transform; 
 
-
               uniform mat4 view;
               uniform mat4 model;
               uniform mat4 projection;
 
               void main() {
                 // Animation
-                //gl_Position = projection * view * model * transform * vec4(position, 1.0f);
-                gl_Position = projection * view * model * vec4(position, 1.0f);
+                gl_Position = projection * view * model * transform * vec4(position, 1.0f);
+                //gl_Position = projection * view * model * vec4(position, 1.0f);
                newColor = color;
                OutTexCoords = InTexCoords;
 
                 }
-
-
           """
 
     FRAGMENT_SHADER = """
@@ -108,7 +105,6 @@ def main():
               outColor = texture(samplerTex, OutTexCoords);
 
            }
-
        """
 
     # Compile The Program and shaders
@@ -166,9 +162,104 @@ def main():
     # Creating Projection Matrix
     view = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, -2.0]))
     print("Log: view \n", view)
-    projection = Matrix44.perspective_projection(80.0, _width / _height, 0.1, 100.0)
-    print("Log: projection \n", projection)
+    projection = None
+
+    # project 1
+    perspective = Matrix44.perspective_projection(80.0, _aspect, 0.1, 100.0)
+
+    # project 2
+    _max = 2
+    _r = _max * _aspect
+    _t = _max
+    _l = -_r
+    _b = -_t
+
+    worldToCamera = Matrix44([
+        [1, 0, 0, 0],
+        [0, 2, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]])
+
+    def multPointMatrix(_in, _out, _M):
+        # out = in * Mproj;
+        # /* _in.z = 1 */
+        _out.x = _in.x * _M[0][0] + _in.y * _M[1][0] + _in.z * _M[2][0] + _M[3][0]
+        _out.y = _in.x * _M[0][1] + _in.y * _M[1][1] + _in.z * _M[2][1] + _M[3][1]
+        _out.z = _in.x * _M[0][2] + _in.y * _M[1][2] + _in.z * _M[2][2] + _M[3][2]
+        w = _in.x * _M[0][3] + _in.y * _M[1][3] + _in.z * _M[2][3] + _M[3][3]
+
+        # normalize if w is different than 1 (convert from homogeneous to Cartesian coordinates)
+        if w != 1:
+            _out.x /= w
+            _out.y /= w
+            _out.z /= w
+
+    class MaxVal:
+        SI8 = 2 ** 7 - 1
+        UI8 = 2 ** 8 - 1
+        SI16 = 2 ** 15 - 1
+        UI16 = 2 ** 16 - 1
+        SI32 = 2 ** 31 - 1
+        UI32 = 2 ** 32 - 1
+        SI64 = 2 ** 63 - 1
+        UI64 = 2 ** 64 - 1
+
+    kInfinity = MaxVal.UI32
+
+    class WorldClass:
+        def __init__(self, initValue):
+            self.x = initValue
+            self.y = initValue
+            self.z = initValue
+
+    minWorld = WorldClass(kInfinity)
+    maxWorld = WorldClass(-kInfinity)
+
+    for i in range(0, len(cube), 8):
+        if (cube[i] < minWorld.x): minWorld.x = cube[i]
+        if (cube[i+1] < minWorld.y): minWorld.y = cube[i+1]
+        if (cube[i+2] < minWorld.z): minWorld.z = cube[i+2]
+
+        if (cube[i] > maxWorld.x): maxWorld.x = cube[i]
+        if (cube[i+1] > maxWorld.y): maxWorld.y = cube[i+1]
+        if (cube[i+2] > maxWorld.z): maxWorld.z = cube[i+2]
+
+    print("Log: max World ", maxWorld.x, maxWorld.y, maxWorld.z)
+    print("Log: min World ", minWorld.x, minWorld.y, minWorld.z)
+    print("Log: -----")
+    minCamera = WorldClass(0)
+    maxCamera = WorldClass(0)
+
+    print("Log: M0 ", worldToCamera[0][0],worldToCamera[0][1], worldToCamera[0][2], worldToCamera[0][3])
+    print("Log: M1 ", worldToCamera[1][0],worldToCamera[1][1], worldToCamera[1][2], worldToCamera[1][3])
+    print("Log: M2 ", worldToCamera[2][0],worldToCamera[2][1], worldToCamera[2][2], worldToCamera[2][3])
+    print("Log: M3 ", worldToCamera[3][0],worldToCamera[3][1], worldToCamera[3][2], worldToCamera[3][3])
+    print("Log: -----")
+    multPointMatrix(minWorld, minCamera, worldToCamera)
+    multPointMatrix(maxWorld, maxCamera, worldToCamera)
+
+    print("Log: max Camera ", maxCamera.x, maxCamera.y, maxCamera.z)
+    print("Log: min Camera ", minCamera.x, minCamera.y, minCamera.z)
+
+    maxx = max(abs(minCamera.x), abs(maxCamera.x))
+    maxy = max(abs(minCamera.y), abs(maxCamera.y))
+    maxvalue = max(maxx, maxy)
+    _r = maxvalue * _aspect
+    _t = maxvalue
+    _l = -_r
+    _b = -_t
+
+    print("Log: Camera ", _l, _r, _t, _b)
+
+    orthogonal = Matrix44.orthogonal_projection(_l, _r, _t, _b, 0.1, 100)
     model = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, 0.0]))
+
+    projection = perspective
+
+    # ---------------------------------------------------------------------------
+    print("Log: -----")
+    print("Log: perspective \n", perspective)
+    print("Log: orthogonal \n", orthogonal)
     print("Log: model \n", model)
 
     _v = Vector4([-0.5, 0, 0, 1])
@@ -180,6 +271,7 @@ def main():
     # 1.0:          1.1917
     # Modify view will not effect the clip cause the geometry is already in the box with size [-1,-1,-1]~[1,1,1]
     # and only has that it's whether we see it, not whether it's clipped
+
     _result = projection * view * model * _v
     _comp = projection * view * model
     _x = _v.x
@@ -190,12 +282,19 @@ def main():
     posY = _x * _comp.m12 + _y * _comp.m22 + _z * _comp.m32 + _w * _comp.m42
     posZ = _x * _comp.m13 + _y * _comp.m23 + _z * _comp.m33 + _w * _comp.m43
     posW = _x * _comp.m14 + _y * _comp.m24 + _z * _comp.m34 + _w * _comp.m44
+    print("Log: -----")
     print("Log: V ", _v)
     print("Log: CLIP X Y Z W", posX, posY, posZ, posW)
+    print("Log: -----")
     print("Log: M Result \n", model * _v)
     print("Log: MV Result \n", view * model * _v)
     print("Log: MVP Result \n", _result)
+    print("Log: -----")
     print("Log: NDC X Y Z", posX/posW, posY/posW, posZ/posW)
+
+    # ---------------------------------------------------------------------------
+
+    # projection = perspective
 
     view_loc = glGetUniformLocation(shader, "view")
     proj_loc = glGetUniformLocation(shader, "projection")
@@ -210,8 +309,8 @@ def main():
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        rot_x = pyrr.Matrix44.from_x_rotation(0.5 * glfw.get_time())
-        rot_y = pyrr.Matrix44.from_y_rotation(0.8 * glfw.get_time())
+        rot_x = pyrr.Matrix44.from_x_rotation(0.05 * glfw.get_time())
+        rot_y = pyrr.Matrix44.from_y_rotation(0.08 * glfw.get_time())
 
         transformLoc = glGetUniformLocation(shader, "transform")
         glUniformMatrix4fv(transformLoc, 1, GL_FALSE, rot_x * rot_y)
