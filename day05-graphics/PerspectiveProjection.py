@@ -8,11 +8,19 @@ import pyrr
 from pyrr import Quaternion, Matrix33, Matrix44, Vector4
 from PIL import Image
 
+
+_INTER = 1
+
+
 def main():
     if not glfw.init():
         return
-    _width = 600
-    _height = 600
+    if _INTER == 0:
+        _width = 600
+        _height = 600
+    elif _INTER == 1:
+        _width = 640
+        _height = 480
     _aspect = _width / _height
     window = glfw.create_window(_width, _height, "Pyopengl Perspective Projection", None, None)
 
@@ -174,9 +182,9 @@ def main():
     _l = -_r
     _b = -_t
 
-    worldToCamera = Matrix44([
+    worldToCamera = Matrix44([  # for ortho
         [1, 0, 0, 0],
-        [0, 2, 0, 0],
+        [0, 1, 0, 0],
         [0, 0, 1, 0],
         [0, 0, 0, 1]])
 
@@ -230,10 +238,10 @@ def main():
     minCamera = WorldClass(0)
     maxCamera = WorldClass(0)
 
-    print("Log: M0 ", worldToCamera[0][0],worldToCamera[0][1], worldToCamera[0][2], worldToCamera[0][3])
-    print("Log: M1 ", worldToCamera[1][0],worldToCamera[1][1], worldToCamera[1][2], worldToCamera[1][3])
-    print("Log: M2 ", worldToCamera[2][0],worldToCamera[2][1], worldToCamera[2][2], worldToCamera[2][3])
-    print("Log: M3 ", worldToCamera[3][0],worldToCamera[3][1], worldToCamera[3][2], worldToCamera[3][3])
+    print("Log: M0 ", worldToCamera[0][0], worldToCamera[0][1], worldToCamera[0][2], worldToCamera[0][3])
+    print("Log: M1 ", worldToCamera[1][0], worldToCamera[1][1], worldToCamera[1][2], worldToCamera[1][3])
+    print("Log: M2 ", worldToCamera[2][0], worldToCamera[2][1], worldToCamera[2][2], worldToCamera[2][3])
+    print("Log: M3 ", worldToCamera[3][0], worldToCamera[3][1], worldToCamera[3][2], worldToCamera[3][3])
     print("Log: -----")
     multPointMatrix(minWorld, minCamera, worldToCamera)
     multPointMatrix(maxWorld, maxCamera, worldToCamera)
@@ -253,8 +261,13 @@ def main():
 
     orthogonal = Matrix44.orthogonal_projection(_l, _r, _t, _b, 0.1, 100)
     model = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, 0.0]))
+    screen = Matrix44([
+        [_width/2.0, 0, 0, _width/2.0],
+        [0, _height/2.0, 0, _height/2.0],
+        [0, 0, 0.5, 0.5],
+        [0, 0, 0, 1]])
 
-    projection = perspective
+    projection = orthogonal
 
     # ---------------------------------------------------------------------------
     print("Log: -----")
@@ -262,10 +275,10 @@ def main():
     print("Log: orthogonal \n", orthogonal)
     print("Log: model \n", model)
 
-    _v = Vector4([-0.5, 0, 0, 1])
-    # view - .0, .0, -2
+    _v = Vector4([-0.5, -0.5, 0, 1])
+    # view - 0.0, 0.0, -2
     # proj - 80 1.0 0.1 100
-    # mode - .0, .0, .0
+    # mode - 0.0, 0.0, 0.0
     #
     # 0.5: 182/300  0.5958
     # 1.0:          1.1917
