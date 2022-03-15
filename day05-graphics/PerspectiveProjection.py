@@ -188,6 +188,29 @@ def main():
         [0, 0, 1, 0],
         [0, 0, 0, 1]])
 
+    def glOrtho(b, t, l, r, n, f, M):
+        M[0][0] = 2 / (r - l)
+        M[0][1] = 0
+        M[0][2] = 0
+        M[0][3] = 0
+
+        M[1][0] = 0
+        M[1][1] = 2 / (t - b)
+        M[1][2] = 0
+        M[1][3] = 0
+
+        M[2][0] = 0
+        M[2][1] = 0
+        M[2][2] = -2 / (f - n)
+        M[2][3] = 0
+
+        M[3][0] = -(r + l) / (r - l)
+        M[3][1] = -(t + b) / (t - b)
+        M[3][2] = -(f + n) / (f - n)
+        M[3][3] = 1
+
+
+
     def multPointMatrix(_in, _out, _M):
         # out = in * Mproj;
         # /* _in.z = 1 */
@@ -260,14 +283,21 @@ def main():
     print("Log: Camera ", _l, _r, _t, _b)
 
     orthogonal = Matrix44.orthogonal_projection(_l, _r, _t, _b, 0.1, 100)
+
+    _emptyOrtho = [[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]]
+    glOrtho(_b, _t, _l, _r, 0.1, 100, _emptyOrtho)
+    orthogonalTest = Matrix44(_emptyOrtho)
+
+    print("Log: _testOrtho", _emptyOrtho)
     model = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, 0.0]))
+
     screen = Matrix44([
         [_width/2.0, 0, 0, _width/2.0],
         [0, _height/2.0, 0, _height/2.0],
         [0, 0, 0.5, 0.5],
         [0, 0, 0, 1]])
 
-    projection = orthogonal
+    projection = orthogonalTest
 
     # ---------------------------------------------------------------------------
     print("Log: -----")
