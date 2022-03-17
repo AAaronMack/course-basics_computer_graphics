@@ -1,4 +1,5 @@
 # https://codeloop.org/python-modern-opengl-perspective-projection/
+import math
 
 import glfw
 from OpenGL.GL import *
@@ -34,6 +35,30 @@ def glOrtho(b, t, l, r, n, f, M):
     M[3][3] = 1
 
 
+def glPersp(fov, aspect, n, f, M):
+    t, b, l, r = fovConverter(fov, aspect, n)
+
+    M[0][0] = 2 * n / (r - l)
+    M[0][1] = 0
+    M[0][2] = 0
+    M[0][3] = 0
+
+    M[1][0] = 0
+    M[1][1] = 2 * n / (t - b)
+    M[1][2] = 0
+    M[1][3] = 0
+
+    M[2][0] = (r + l) / (r - l)
+    M[2][1] = (t + b) / (t - b)
+    M[2][2] = - (f + n) / (f - n)
+    M[2][3] = -1
+
+    M[3][0] = 0
+    M[3][1] = 0
+    M[3][2] = -(2 * f * n) / (f - n)
+    M[3][3] = 0
+
+
 def multPointMatrix(_in, _out, _M):
     # out = in * Mproj;
     # /* _in.z = 1 */
@@ -49,7 +74,20 @@ def multPointMatrix(_in, _out, _M):
         _out.z /= w
 
 
-def createOrthogonalMatrix(_aspect, cube):
+def fovConverter(angleOfView, imageAspectRatio, n):
+    t = math.tan(angleOfView * 0.5 * math.pi / 180) * n
+    b = -t
+    r = imageAspectRatio * t
+    l = imageAspectRatio * (-t)  # or simply l = -r
+    return t, b, l, r
+
+
+def createOrthogonalMatrix(aspect, cube, n, f):
+    # --------------------------------------------------------------------------
+    # follow
+    #   https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/orthographic-projection-matrix
+    #       Text Program
+
     worldToCamera = Matrix44([  # for ortho
         [1, 0, 0, 0],
         [0, 1, 0, 0],
@@ -57,7 +95,6 @@ def createOrthogonalMatrix(_aspect, cube):
         [0, 0, 0, 1]])
 
     kInfinity = MaxVal.UI32
-
     minWorld = WorldClass(kInfinity)
     maxWorld = WorldClass(-kInfinity)
 
@@ -72,34 +109,34 @@ def createOrthogonalMatrix(_aspect, cube):
 
     print("Log: max World ", maxWorld.x, maxWorld.y, maxWorld.z)
     print("Log: min World ", minWorld.x, minWorld.y, minWorld.z)
-    print("Log: -----")
+    # print("Log: -----")
     minCamera = WorldClass(0)
     maxCamera = WorldClass(0)
-
-    print("Log: M0 ", worldToCamera[0][0], worldToCamera[0][1], worldToCamera[0][2], worldToCamera[0][3])
-    print("Log: M1 ", worldToCamera[1][0], worldToCamera[1][1], worldToCamera[1][2], worldToCamera[1][3])
-    print("Log: M2 ", worldToCamera[2][0], worldToCamera[2][1], worldToCamera[2][2], worldToCamera[2][3])
-    print("Log: M3 ", worldToCamera[3][0], worldToCamera[3][1], worldToCamera[3][2], worldToCamera[3][3])
-    print("Log: -----")
+    # print("Log: M0 ", worldToCamera[0][0], worldToCamera[0][1], worldToCamera[0][2], worldToCamera[0][3])
+    # print("Log: M1 ", worldToCamera[1][0], worldToCamera[1][1], worldToCamera[1][2], worldToCamera[1][3])
+    # print("Log: M2 ", worldToCamera[2][0], worldToCamera[2][1], worldToCamera[2][2], worldToCamera[2][3])
+    # print("Log: M3 ", worldToCamera[3][0], worldToCamera[3][1], worldToCamera[3][2], worldToCamera[3][3])
+    # print("Log: -----")
     multPointMatrix(minWorld, minCamera, worldToCamera)
     multPointMatrix(maxWorld, maxCamera, worldToCamera)
+    # print("Log: max Camera ", maxCamera.x, maxCamera.y, maxCamera.z)
+    # print("Log: min Camera ", minCamera.x, minCamera.y, minCamera.z)
 
-    print("Log: max Camera ", maxCamera.x, maxCamera.y, maxCamera.z)
-    print("Log: min Camera ", minCamera.x, minCamera.y, minCamera.z)
-
+    # setup `r t b l` values
     maxx = max(abs(minCamera.x), abs(maxCamera.x))
     maxy = max(abs(minCamera.y), abs(maxCamera.y))
     maxvalue = max(maxx, maxy)
-    _r = maxvalue * _aspect
+    _r = maxvalue * aspect
     _t = maxvalue
     _l = -_r
     _b = -_t
+    # print("Log: left right top bottom ", _l, _r, _t, _b)
 
-    print("Log: left right top bottom ", _l, _r, _t, _b)
+    # Use pyrr library to create Ortho-Matrix
+    orthogonal = Matrix44.orthogonal_projection(_l, _r, _t, _b, n, f)
 
-    orthogonal = Matrix44.orthogonal_projection(_l, _r, _t, _b, 0.1, 100)
-
-    _emptyOrtho = [[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]]
+    # Use our self method to create Ortho-Matrix
+    _emptyOrtho = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
     glOrtho(_b, _t, _l, _r, 0.1, 100, _emptyOrtho)
     orthogonalTest = Matrix44(_emptyOrtho)
 
@@ -107,6 +144,21 @@ def createOrthogonalMatrix(_aspect, cube):
     print("Log: orthogonalTest \n", orthogonalTest)
 
     return orthogonal, orthogonalTest
+
+
+def createPerspMatrix(fov, aspect, n, f):
+    _emptyPersp = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+
+    # Use pyrr library to create Ortho-Matrix
+    perspective = Matrix44.perspective_projection(fov, aspect, n, f)
+
+    # Use our self method to create Ortho-Matrix
+    glPersp(fov, aspect, n, f, _emptyPersp)
+    perspectiveTest = Matrix44(_emptyPersp)
+    print("Log: testPersp", _emptyPersp)
+    print("Log: perspectiveTest \n", perspectiveTest)
+
+    return perspective, perspectiveTest
 
 
 class MaxVal:
@@ -206,8 +258,8 @@ def main():
 
               void main() {
                 // Animation
-                gl_Position = projection * view * model * transform * vec4(position, 1.0f);
-                //gl_Position = projection * view * model * vec4(position, 1.0f);
+                //gl_Position = projection * view * model * transform * vec4(position, 1.0f);
+                gl_Position = projection * view * model * vec4(position, 1.0f);
                newColor = color;
                OutTexCoords = InTexCoords;
 
@@ -224,9 +276,7 @@ def main():
             uniform sampler2D samplerTex;
 
            void main() {
-
               outColor = texture(samplerTex, OutTexCoords);
-
            }
        """
 
@@ -283,19 +333,22 @@ def main():
     glEnable(GL_DEPTH_TEST)
 
     # Creating Projection Matrix
-    view = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, -2.0]))
+    n = 0.01
+    f = 100.0
+    fov = 90.0
 
     # project 1
-    perspective = Matrix44.perspective_projection(80.0, _aspect, 0.1, 100.0)
+    perspective, perspectiveTest = createPerspMatrix(fov, _aspect, n, f)
 
     # project 2
-    orthogonal, orthogonalTest = createOrthogonalMatrix(_aspect, cube)
+    orthogonal, orthogonalTest = createOrthogonalMatrix(_aspect, cube, n, f)
 
-    projection = orthogonalTest
+    # edit this [orthogonal, orthogonalTest, perspective, perspectiveTest]
+    projection = perspectiveTest
 
     # ---------------------------------------------------------------------------
     model = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, 0.0]))
-
+    view = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, -2.0]))
     screen = Matrix44([
         [_width/2.0, 0, 0, _width/2.0],
         [0, _height/2.0, 0, _height/2.0],
@@ -311,17 +364,16 @@ def main():
     print("Log: model \n", model)
     print("Log: screen \n", screen)
 
-    original_v = Vector4([-0.25, -0.25, -0.25, 1])
+    original_v = Vector4([0.5, 0.5, 0.5, 1])
     # view - 0.0, 0.0, -2
     # proj - 80 1.0 0.1 100
     # mode - 0.0, 0.0, 0.0
     #
-    # 0.5: 182/300  0.5958
+    # 0.5: 180/300  0.5958  // pixel ratio
     # 1.0:          1.1917
     # Modify view will not effect the clip cause the geometry is already in the box with size [-1,-1,-1]~[1,1,1]
     # and only has that it's whether we see it, not whether it's clipped
 
-    _result = projection * view * model * original_v
     mvp_matrix = projection * view * model
     _x = original_v.x
     _y = original_v.y
@@ -331,15 +383,17 @@ def main():
     clip_y = _x * mvp_matrix.m12 + _y * mvp_matrix.m22 + _z * mvp_matrix.m32 + _w * mvp_matrix.m42
     clip_z = _x * mvp_matrix.m13 + _y * mvp_matrix.m23 + _z * mvp_matrix.m33 + _w * mvp_matrix.m43
     clip_w = _x * mvp_matrix.m14 + _y * mvp_matrix.m24 + _z * mvp_matrix.m34 + _w * mvp_matrix.m44
-    ndc_v = Vector4([clip_x/clip_w, clip_y/clip_w, clip_z/clip_w, clip_w])
+
+    # notice: we must set the w value to 1 after we already divided by w
+    ndc_v = Vector4([clip_x/clip_w, clip_y/clip_w, clip_z/clip_w, 1])
     print("Log: -----")
-    print("Log: V ", original_v)
-    print("Log: CLIP X Y Z W", clip_x, clip_y, clip_z, clip_w)
+    print("Log: V \n", original_v)
+    print("Log: CLIP \n", clip_x, clip_y, clip_z, clip_w)
     print("Log: -----")
     print("Log: M Result \n", model * original_v)
     print("Log: MV Result \n", view * model * original_v)
-    print("Log: MVP Result \n", _result)
-    print("Log: NDC \n", ndc_v)
+    print("Log: MVP Result \n", projection * view * model * original_v)  # mvp-result must be same as clip-result
+    print("Log: NDC (divide by w) \n", ndc_v)
     print("Log: Screen \n", screen * ndc_v)
     print("Log: -----")
     # ---------------------------------------------------------------------------
@@ -364,7 +418,6 @@ def main():
         glUniformMatrix4fv(transformLoc, 1, GL_FALSE, rot_x * rot_y)
 
         # Draw Cube
-
         glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, None)
 
         glfw.swap_buffers(window)

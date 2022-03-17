@@ -6,3 +6,4 @@ log
 *.log
 
 .idea
+/resources/tools/
