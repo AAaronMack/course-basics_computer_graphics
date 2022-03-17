@@ -9,7 +9,122 @@ from pyrr import Quaternion, Matrix33, Matrix44, Vector4
 from PIL import Image
 
 
-_INTER = 1
+_INTER = 0
+
+
+def glOrtho(b, t, l, r, n, f, M):
+    M[0][0] = 2 / (r - l)
+    M[0][1] = 0
+    M[0][2] = 0
+    M[0][3] = 0
+
+    M[1][0] = 0
+    M[1][1] = 2 / (t - b)
+    M[1][2] = 0
+    M[1][3] = 0
+
+    M[2][0] = 0
+    M[2][1] = 0
+    M[2][2] = -2 / (f - n)
+    M[2][3] = 0
+
+    M[3][0] = -(r + l) / (r - l)
+    M[3][1] = -(t + b) / (t - b)
+    M[3][2] = -(f + n) / (f - n)
+    M[3][3] = 1
+
+
+def multPointMatrix(_in, _out, _M):
+    # out = in * Mproj;
+    # /* _in.z = 1 */
+    _out.x = _in.x * _M[0][0] + _in.y * _M[1][0] + _in.z * _M[2][0] + _M[3][0]
+    _out.y = _in.x * _M[0][1] + _in.y * _M[1][1] + _in.z * _M[2][1] + _M[3][1]
+    _out.z = _in.x * _M[0][2] + _in.y * _M[1][2] + _in.z * _M[2][2] + _M[3][2]
+    w = _in.x * _M[0][3] + _in.y * _M[1][3] + _in.z * _M[2][3] + _M[3][3]
+
+    # normalize if w is different than 1 (convert from homogeneous to Cartesian coordinates)
+    if w != 1:
+        _out.x /= w
+        _out.y /= w
+        _out.z /= w
+
+
+def createOrthogonalMatrix(_aspect, cube):
+    worldToCamera = Matrix44([  # for ortho
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]])
+
+    kInfinity = MaxVal.UI32
+
+    minWorld = WorldClass(kInfinity)
+    maxWorld = WorldClass(-kInfinity)
+
+    for i in range(0, len(cube), 8):
+        if (cube[i] < minWorld.x): minWorld.x = cube[i]
+        if (cube[i + 1] < minWorld.y): minWorld.y = cube[i + 1]
+        if (cube[i + 2] < minWorld.z): minWorld.z = cube[i + 2]
+
+        if (cube[i] > maxWorld.x): maxWorld.x = cube[i]
+        if (cube[i + 1] > maxWorld.y): maxWorld.y = cube[i + 1]
+        if (cube[i + 2] > maxWorld.z): maxWorld.z = cube[i + 2]
+
+    print("Log: max World ", maxWorld.x, maxWorld.y, maxWorld.z)
+    print("Log: min World ", minWorld.x, minWorld.y, minWorld.z)
+    print("Log: -----")
+    minCamera = WorldClass(0)
+    maxCamera = WorldClass(0)
+
+    print("Log: M0 ", worldToCamera[0][0], worldToCamera[0][1], worldToCamera[0][2], worldToCamera[0][3])
+    print("Log: M1 ", worldToCamera[1][0], worldToCamera[1][1], worldToCamera[1][2], worldToCamera[1][3])
+    print("Log: M2 ", worldToCamera[2][0], worldToCamera[2][1], worldToCamera[2][2], worldToCamera[2][3])
+    print("Log: M3 ", worldToCamera[3][0], worldToCamera[3][1], worldToCamera[3][2], worldToCamera[3][3])
+    print("Log: -----")
+    multPointMatrix(minWorld, minCamera, worldToCamera)
+    multPointMatrix(maxWorld, maxCamera, worldToCamera)
+
+    print("Log: max Camera ", maxCamera.x, maxCamera.y, maxCamera.z)
+    print("Log: min Camera ", minCamera.x, minCamera.y, minCamera.z)
+
+    maxx = max(abs(minCamera.x), abs(maxCamera.x))
+    maxy = max(abs(minCamera.y), abs(maxCamera.y))
+    maxvalue = max(maxx, maxy)
+    _r = maxvalue * _aspect
+    _t = maxvalue
+    _l = -_r
+    _b = -_t
+
+    print("Log: left right top bottom ", _l, _r, _t, _b)
+
+    orthogonal = Matrix44.orthogonal_projection(_l, _r, _t, _b, 0.1, 100)
+
+    _emptyOrtho = [[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]]
+    glOrtho(_b, _t, _l, _r, 0.1, 100, _emptyOrtho)
+    orthogonalTest = Matrix44(_emptyOrtho)
+
+    print("Log: testOrtho", _emptyOrtho)
+    print("Log: orthogonalTest \n", orthogonalTest)
+
+    return orthogonal, orthogonalTest
+
+
+class MaxVal:
+    SI8 = 2 ** 7 - 1
+    UI8 = 2 ** 8 - 1
+    SI16 = 2 ** 15 - 1
+    UI16 = 2 ** 16 - 1
+    SI32 = 2 ** 31 - 1
+    UI32 = 2 ** 32 - 1
+    SI64 = 2 ** 63 - 1
+    UI64 = 2 ** 64 - 1
+
+
+class WorldClass:
+    def __init__(self, initValue):
+        self.x = initValue
+        self.y = initValue
+        self.z = initValue
 
 
 def main():
@@ -169,126 +284,16 @@ def main():
 
     # Creating Projection Matrix
     view = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, -2.0]))
-    print("Log: view \n", view)
-    projection = None
 
     # project 1
     perspective = Matrix44.perspective_projection(80.0, _aspect, 0.1, 100.0)
 
     # project 2
-    _max = 2
-    _r = _max * _aspect
-    _t = _max
-    _l = -_r
-    _b = -_t
+    orthogonal, orthogonalTest = createOrthogonalMatrix(_aspect, cube)
 
-    worldToCamera = Matrix44([  # for ortho
-        [1, 0, 0, 0],
-        [0, 1, 0, 0],
-        [0, 0, 1, 0],
-        [0, 0, 0, 1]])
+    projection = orthogonalTest
 
-    def glOrtho(b, t, l, r, n, f, M):
-        M[0][0] = 2 / (r - l)
-        M[0][1] = 0
-        M[0][2] = 0
-        M[0][3] = 0
-
-        M[1][0] = 0
-        M[1][1] = 2 / (t - b)
-        M[1][2] = 0
-        M[1][3] = 0
-
-        M[2][0] = 0
-        M[2][1] = 0
-        M[2][2] = -2 / (f - n)
-        M[2][3] = 0
-
-        M[3][0] = -(r + l) / (r - l)
-        M[3][1] = -(t + b) / (t - b)
-        M[3][2] = -(f + n) / (f - n)
-        M[3][3] = 1
-
-
-
-    def multPointMatrix(_in, _out, _M):
-        # out = in * Mproj;
-        # /* _in.z = 1 */
-        _out.x = _in.x * _M[0][0] + _in.y * _M[1][0] + _in.z * _M[2][0] + _M[3][0]
-        _out.y = _in.x * _M[0][1] + _in.y * _M[1][1] + _in.z * _M[2][1] + _M[3][1]
-        _out.z = _in.x * _M[0][2] + _in.y * _M[1][2] + _in.z * _M[2][2] + _M[3][2]
-        w = _in.x * _M[0][3] + _in.y * _M[1][3] + _in.z * _M[2][3] + _M[3][3]
-
-        # normalize if w is different than 1 (convert from homogeneous to Cartesian coordinates)
-        if w != 1:
-            _out.x /= w
-            _out.y /= w
-            _out.z /= w
-
-    class MaxVal:
-        SI8 = 2 ** 7 - 1
-        UI8 = 2 ** 8 - 1
-        SI16 = 2 ** 15 - 1
-        UI16 = 2 ** 16 - 1
-        SI32 = 2 ** 31 - 1
-        UI32 = 2 ** 32 - 1
-        SI64 = 2 ** 63 - 1
-        UI64 = 2 ** 64 - 1
-
-    kInfinity = MaxVal.UI32
-
-    class WorldClass:
-        def __init__(self, initValue):
-            self.x = initValue
-            self.y = initValue
-            self.z = initValue
-
-    minWorld = WorldClass(kInfinity)
-    maxWorld = WorldClass(-kInfinity)
-
-    for i in range(0, len(cube), 8):
-        if (cube[i] < minWorld.x): minWorld.x = cube[i]
-        if (cube[i+1] < minWorld.y): minWorld.y = cube[i+1]
-        if (cube[i+2] < minWorld.z): minWorld.z = cube[i+2]
-
-        if (cube[i] > maxWorld.x): maxWorld.x = cube[i]
-        if (cube[i+1] > maxWorld.y): maxWorld.y = cube[i+1]
-        if (cube[i+2] > maxWorld.z): maxWorld.z = cube[i+2]
-
-    print("Log: max World ", maxWorld.x, maxWorld.y, maxWorld.z)
-    print("Log: min World ", minWorld.x, minWorld.y, minWorld.z)
-    print("Log: -----")
-    minCamera = WorldClass(0)
-    maxCamera = WorldClass(0)
-
-    print("Log: M0 ", worldToCamera[0][0], worldToCamera[0][1], worldToCamera[0][2], worldToCamera[0][3])
-    print("Log: M1 ", worldToCamera[1][0], worldToCamera[1][1], worldToCamera[1][2], worldToCamera[1][3])
-    print("Log: M2 ", worldToCamera[2][0], worldToCamera[2][1], worldToCamera[2][2], worldToCamera[2][3])
-    print("Log: M3 ", worldToCamera[3][0], worldToCamera[3][1], worldToCamera[3][2], worldToCamera[3][3])
-    print("Log: -----")
-    multPointMatrix(minWorld, minCamera, worldToCamera)
-    multPointMatrix(maxWorld, maxCamera, worldToCamera)
-
-    print("Log: max Camera ", maxCamera.x, maxCamera.y, maxCamera.z)
-    print("Log: min Camera ", minCamera.x, minCamera.y, minCamera.z)
-
-    maxx = max(abs(minCamera.x), abs(maxCamera.x))
-    maxy = max(abs(minCamera.y), abs(maxCamera.y))
-    maxvalue = max(maxx, maxy)
-    _r = maxvalue * _aspect
-    _t = maxvalue
-    _l = -_r
-    _b = -_t
-
-    print("Log: Camera ", _l, _r, _t, _b)
-
-    orthogonal = Matrix44.orthogonal_projection(_l, _r, _t, _b, 0.1, 100)
-
-    _emptyOrtho = [[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]]
-    glOrtho(_b, _t, _l, _r, 0.1, 100, _emptyOrtho)
-    orthogonalTest = Matrix44(_emptyOrtho)
-
-    print("Log: _testOrtho", _emptyOrtho)
+    # ---------------------------------------------------------------------------
     model = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, 0.0]))
 
     screen = Matrix44([
@@ -297,15 +302,16 @@ def main():
         [0, 0, 0.5, 0.5],
         [0, 0, 0, 1]])
 
-    projection = orthogonalTest
+    screen = screen.transpose()
 
-    # ---------------------------------------------------------------------------
     print("Log: -----")
+    print("Log: view \n", view)
     print("Log: perspective \n", perspective)
     print("Log: orthogonal \n", orthogonal)
     print("Log: model \n", model)
+    print("Log: screen \n", screen)
 
-    _v = Vector4([-0.5, -0.5, 0, 1])
+    original_v = Vector4([-0.25, -0.25, -0.25, 1])
     # view - 0.0, 0.0, -2
     # proj - 80 1.0 0.1 100
     # mode - 0.0, 0.0, 0.0
@@ -315,29 +321,28 @@ def main():
     # Modify view will not effect the clip cause the geometry is already in the box with size [-1,-1,-1]~[1,1,1]
     # and only has that it's whether we see it, not whether it's clipped
 
-    _result = projection * view * model * _v
-    _comp = projection * view * model
-    _x = _v.x
-    _y = _v.y
-    _z = _v.z
-    _w = _v.w
-    posX = _x * _comp.m11 + _y * _comp.m21 + _z * _comp.m31 + _w * _comp.m41
-    posY = _x * _comp.m12 + _y * _comp.m22 + _z * _comp.m32 + _w * _comp.m42
-    posZ = _x * _comp.m13 + _y * _comp.m23 + _z * _comp.m33 + _w * _comp.m43
-    posW = _x * _comp.m14 + _y * _comp.m24 + _z * _comp.m34 + _w * _comp.m44
+    _result = projection * view * model * original_v
+    mvp_matrix = projection * view * model
+    _x = original_v.x
+    _y = original_v.y
+    _z = original_v.z
+    _w = original_v.w
+    clip_x = _x * mvp_matrix.m11 + _y * mvp_matrix.m21 + _z * mvp_matrix.m31 + _w * mvp_matrix.m41
+    clip_y = _x * mvp_matrix.m12 + _y * mvp_matrix.m22 + _z * mvp_matrix.m32 + _w * mvp_matrix.m42
+    clip_z = _x * mvp_matrix.m13 + _y * mvp_matrix.m23 + _z * mvp_matrix.m33 + _w * mvp_matrix.m43
+    clip_w = _x * mvp_matrix.m14 + _y * mvp_matrix.m24 + _z * mvp_matrix.m34 + _w * mvp_matrix.m44
+    ndc_v = Vector4([clip_x/clip_w, clip_y/clip_w, clip_z/clip_w, clip_w])
     print("Log: -----")
-    print("Log: V ", _v)
-    print("Log: CLIP X Y Z W", posX, posY, posZ, posW)
+    print("Log: V ", original_v)
+    print("Log: CLIP X Y Z W", clip_x, clip_y, clip_z, clip_w)
     print("Log: -----")
-    print("Log: M Result \n", model * _v)
-    print("Log: MV Result \n", view * model * _v)
+    print("Log: M Result \n", model * original_v)
+    print("Log: MV Result \n", view * model * original_v)
     print("Log: MVP Result \n", _result)
+    print("Log: NDC \n", ndc_v)
+    print("Log: Screen \n", screen * ndc_v)
     print("Log: -----")
-    print("Log: NDC X Y Z", posX/posW, posY/posW, posZ/posW)
-
     # ---------------------------------------------------------------------------
-
-    # projection = perspective
 
     view_loc = glGetUniformLocation(shader, "view")
     proj_loc = glGetUniformLocation(shader, "projection")
