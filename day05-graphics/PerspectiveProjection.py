@@ -13,7 +13,7 @@ from PIL import Image
 _INTER = 0
 
 
-def glOrtho(b, t, l, r, n, f, M):
+def orthoMatrix(b, t, l, r, n, f, M):
     M[0][0] = 2 / (r - l)
     M[0][1] = 0
     M[0][2] = 0
@@ -35,8 +35,8 @@ def glOrtho(b, t, l, r, n, f, M):
     M[3][3] = 1
 
 
-def glPersp(fov, aspect, n, f, M):
-    t, b, l, r = fovConverter(fov, aspect, n)
+def perspMatrix(fov, aspect, n, f, M):
+    t, b, l, r = fovConvert(fov, aspect, n)
 
     M[0][0] = 2 * n / (r - l)
     M[0][1] = 0
@@ -74,7 +74,7 @@ def multPointMatrix(_in, _out, _M):
         _out.z /= w
 
 
-def fovConverter(angleOfView, imageAspectRatio, n):
+def fovConvert(angleOfView, imageAspectRatio, n):
     t = math.tan(angleOfView * 0.5 * math.pi / 180) * n
     b = -t
     r = imageAspectRatio * t
@@ -137,7 +137,7 @@ def createOrthogonalMatrix(aspect, cube, n, f):
 
     # Use our self method to create Ortho-Matrix
     _emptyOrtho = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
-    glOrtho(_b, _t, _l, _r, 0.1, 100, _emptyOrtho)
+    orthoMatrix(_b, _t, _l, _r, 0.1, 100, _emptyOrtho)
     orthogonalTest = Matrix44(_emptyOrtho)
 
     print("Log: testOrtho", _emptyOrtho)
@@ -153,7 +153,7 @@ def createPerspMatrix(fov, aspect, n, f):
     perspective = Matrix44.perspective_projection(fov, aspect, n, f)
 
     # Use our self method to create Ortho-Matrix
-    glPersp(fov, aspect, n, f, _emptyPersp)
+    perspMatrix(fov, aspect, n, f, _emptyPersp)
     perspectiveTest = Matrix44(_emptyPersp)
     print("Log: testPersp", _emptyPersp)
     print("Log: perspectiveTest \n", perspectiveTest)
@@ -189,14 +189,19 @@ def main():
         _width = 640
         _height = 480
     _aspect = _width / _height
-    window = glfw.create_window(_width, _height, "Pyopengl Perspective Projection", None, None)
+
+    # create our window
+    window = glfw.create_window(_width, _height, "Perspective Projection", None, None)
 
     if not window:
         glfw.terminate()
         return
 
+    # set context
     glfw.make_context_current(window)
-    #        positions         colors          texture coords
+
+    # prepare our cube render data
+    #        positions         colors       texture coords
     cube = [-0.5, -0.5, 0.5, 1.0, 0.0, 0.0, 0.0, 0.0,
             0.5, -0.5, 0.5, 0.0, 1.0, 0.0, 1.0, 0.0,
             0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0,
@@ -226,10 +231,11 @@ def main():
             -0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0,
             -0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0,
             0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 0.0, 1.0]
-    # convert to 32bit float
 
+    # convert our cube data to 32bit float
     cube = np.array(cube, dtype=np.float32)
 
+    # prepare our render index (The order in which vertices are rendered)
     indices = [0, 1, 2, 2, 3, 0,
                4, 5, 6, 6, 7, 4,
                8, 9, 10, 10, 11, 8,
@@ -239,6 +245,7 @@ def main():
 
     indices = np.array(indices, dtype=np.uint32)
 
+    # prepare our vertex-shader
     VERTEX_SHADER = """
 
               #version 330
@@ -266,6 +273,7 @@ def main():
                 }
           """
 
+    # prepare our fragment-shader
     FRAGMENT_SHADER = """
            #version 330
 
@@ -281,20 +289,21 @@ def main():
        """
 
     # Compile The Program and shaders
-
     shader = OpenGL.GL.shaders.compileProgram(OpenGL.GL.shaders.compileShader(VERTEX_SHADER, GL_VERTEX_SHADER),
                                               OpenGL.GL.shaders.compileShader(FRAGMENT_SHADER, GL_FRAGMENT_SHADER))
 
+    # Create Vertex-Buffer-Objects
+    # for more: https://learnopengl.com/Getting-started/Hello-Triangle
     VBO = glGenBuffers(1)
     glBindBuffer(GL_ARRAY_BUFFER, VBO)
     glBufferData(GL_ARRAY_BUFFER, cube.itemsize * len(cube), cube, GL_STATIC_DRAW)
 
-    # Create EBO
+    # Create Element-Buffer-Objects
     EBO = glGenBuffers(1)
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.itemsize * len(indices), indices, GL_STATIC_DRAW)
 
-    # get the position from  shader
+    # get the position/color/coord from shader, The order is the same as when we defined cube
     position = 0
     glBindAttribLocation(shader, position, 'position')
     glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, cube.itemsize * 8, ctypes.c_void_p(0))
@@ -310,6 +319,7 @@ def main():
     glVertexAttribPointer(texCoords, 2, GL_FLOAT, GL_FALSE, cube.itemsize * 8, ctypes.c_void_p(24))
     glEnableVertexAttribArray(texCoords)
 
+    # prepare our texture buffer
     texture = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, texture)
 
@@ -329,7 +339,8 @@ def main():
 
     glUseProgram(shader)
 
-    glClearColor(0.0, 0.0, 0.0, 1.0)
+    # set background color
+    glClearColor(0.125, 0.125, 0.125, 1.0)
     glEnable(GL_DEPTH_TEST)
 
     # Creating Projection Matrix
@@ -337,16 +348,18 @@ def main():
     f = 100.0
     fov = 90.0
 
-    # project 1
+    # create perspective project
     perspective, perspectiveTest = createPerspMatrix(fov, _aspect, n, f)
 
-    # project 2
+    # create orthogonal project
     orthogonal, orthogonalTest = createOrthogonalMatrix(_aspect, cube, n, f)
 
-    # edit this [orthogonal, orthogonalTest, perspective, perspectiveTest]
+    # for tweak to see different effect by apply diff-project
+    #   edit this [orthogonal, orthogonalTest, perspective, perspectiveTest]
     projection = perspectiveTest
 
     # ---------------------------------------------------------------------------
+    # ------------------------------ Our test -----------------------------------
     model = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, 0.0]))
     view = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, -2.0]))
     screen = Matrix44([
@@ -398,6 +411,7 @@ def main():
     print("Log: -----")
     # ---------------------------------------------------------------------------
 
+    # setup MVP matrix to shader
     view_loc = glGetUniformLocation(shader, "view")
     proj_loc = glGetUniformLocation(shader, "projection")
     model_loc = glGetUniformLocation(shader, "model")
@@ -414,6 +428,7 @@ def main():
         rot_x = pyrr.Matrix44.from_x_rotation(0.05 * glfw.get_time())
         rot_y = pyrr.Matrix44.from_y_rotation(0.08 * glfw.get_time())
 
+        # Animation cube
         transformLoc = glGetUniformLocation(shader, "transform")
         glUniformMatrix4fv(transformLoc, 1, GL_FALSE, rot_x * rot_y)
 
