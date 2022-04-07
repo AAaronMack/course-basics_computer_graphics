@@ -8,3 +8,8 @@ log
 .idea
 /resources/tools/
 /day03-javascript/ts/example.js
+
+
+node_modules
+.cache
+dist

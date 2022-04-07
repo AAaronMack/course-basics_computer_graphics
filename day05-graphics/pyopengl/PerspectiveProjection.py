@@ -69,6 +69,7 @@ def multPointMatrix(_in, _out, _M):
 
     # normalize if w is different than 1 (convert from homogeneous to Cartesian coordinates)
     if w != 1:
+        print("normalizing")
         _out.x /= w
         _out.y /= w
         _out.z /= w
@@ -88,12 +89,20 @@ def createOrthogonalMatrix(aspect, cube, n, f):
     #   https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/orthographic-projection-matrix
     #       Text Program
 
+    _emptyOrtho = [
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]
+    ]
+
     worldToCamera = Matrix44([  # for ortho
         [1, 0, 0, 0],
         [0, 1, 0, 0],
         [0, 0, 1, 0],
         [0, 0, 0, 1]])
 
+    # Construct two opposite maxima and minima
     kInfinity = MaxVal.UI32
     minWorld = WorldClass(kInfinity)
     maxWorld = WorldClass(-kInfinity)
@@ -109,18 +118,13 @@ def createOrthogonalMatrix(aspect, cube, n, f):
 
     print("Log: max World ", maxWorld.x, maxWorld.y, maxWorld.z)
     print("Log: min World ", minWorld.x, minWorld.y, minWorld.z)
-    # print("Log: -----")
-    minCamera = WorldClass(0)
-    maxCamera = WorldClass(0)
-    # print("Log: M0 ", worldToCamera[0][0], worldToCamera[0][1], worldToCamera[0][2], worldToCamera[0][3])
-    # print("Log: M1 ", worldToCamera[1][0], worldToCamera[1][1], worldToCamera[1][2], worldToCamera[1][3])
-    # print("Log: M2 ", worldToCamera[2][0], worldToCamera[2][1], worldToCamera[2][2], worldToCamera[2][3])
-    # print("Log: M3 ", worldToCamera[3][0], worldToCamera[3][1], worldToCamera[3][2], worldToCamera[3][3])
-    # print("Log: -----")
-    multPointMatrix(minWorld, minCamera, worldToCamera)
-    multPointMatrix(maxWorld, maxCamera, worldToCamera)
-    # print("Log: max Camera ", maxCamera.x, maxCamera.y, maxCamera.z)
-    # print("Log: min Camera ", minCamera.x, minCamera.y, minCamera.z)
+
+    minCamera = WorldClass2(minWorld)
+    maxCamera = WorldClass2(maxWorld)
+
+    # Multiply camera matrix
+    # multPointMatrix(minWorld, minCamera, worldToCamera)
+    # multPointMatrix(maxWorld, maxCamera, worldToCamera)
 
     # setup `r t b l` values
     maxx = max(abs(minCamera.x), abs(maxCamera.x))
@@ -130,13 +134,12 @@ def createOrthogonalMatrix(aspect, cube, n, f):
     _t = maxvalue
     _l = -_r
     _b = -_t
-    # print("Log: left right top bottom ", _l, _r, _t, _b)
+    print("Log: left right top bottom ", _l, _r, _t, _b)
 
     # Use pyrr library to create Ortho-Matrix
     orthogonal = Matrix44.orthogonal_projection(_l, _r, _t, _b, n, f)
 
     # Use our self method to create Ortho-Matrix
-    _emptyOrtho = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
     orthoMatrix(_b, _t, _l, _r, 0.1, 100, _emptyOrtho)
     orthogonalTest = Matrix44(_emptyOrtho)
 
@@ -147,16 +150,21 @@ def createOrthogonalMatrix(aspect, cube, n, f):
 
 
 def createPerspMatrix(fov, aspect, n, f):
-    _emptyPersp = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    _emptyPersp = [
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]
+    ]
 
-    # Use pyrr library to create Ortho-Matrix
-    perspective = Matrix44.perspective_projection(fov, aspect, n, f)
-
-    # Use our self method to create Ortho-Matrix
+    # Use our self method to create Persp-Matrix
     perspMatrix(fov, aspect, n, f, _emptyPersp)
     perspectiveTest = Matrix44(_emptyPersp)
     print("Log: testPersp", _emptyPersp)
     print("Log: perspectiveTest \n", perspectiveTest)
+
+    # Use pyrr library to create Persp-Matrix
+    perspective = Matrix44.perspective_projection(fov, aspect, n, f)
 
     return perspective, perspectiveTest
 
@@ -179,9 +187,18 @@ class WorldClass:
         self.z = initValue
 
 
+class WorldClass2:
+    def __init__(self, initValue):
+        self.x = initValue.x
+        self.y = initValue.y
+        self.z = initValue.z
+
+
 def main():
+    # init glfw
     if not glfw.init():
         return
+
     if _INTER == 0:
         _width = 600
         _height = 600
@@ -197,7 +214,7 @@ def main():
         glfw.terminate()
         return
 
-    # set context
+    # set OpenGL context
     glfw.make_context_current(window)
 
     # prepare our cube render data
@@ -248,45 +265,45 @@ def main():
     # prepare our vertex-shader
     VERTEX_SHADER = """
 
-              #version 330
-
-              in vec3 position;
-              in vec3 color;
-              in vec2 InTexCoords;
-
-              out vec3 newColor;
-              out vec2 OutTexCoords;
-
-              uniform mat4 transform; 
-
-              uniform mat4 view;
-              uniform mat4 model;
-              uniform mat4 projection;
-
-              void main() {
-                // Animation
-                //gl_Position = projection * view * model * transform * vec4(position, 1.0f);
-                gl_Position = projection * view * model * vec4(position, 1.0f);
-               newColor = color;
-               OutTexCoords = InTexCoords;
-
-                }
-          """
+        #version 330
+        
+        in vec3 position;
+        in vec3 color;
+        in vec2 InTexCoords;
+        
+        out vec3 newColor;
+        out vec2 OutTexCoords;
+        
+        uniform mat4 transform; 
+        
+        uniform mat4 view;
+        uniform mat4 model;
+        uniform mat4 projection;
+        
+        void main() {
+        // Animation
+        //gl_Position = projection * view * model * transform * vec4(position, 1.0f);
+        gl_Position = projection * view * model * vec4(position, 1.0f);
+        newColor = color;
+        OutTexCoords = InTexCoords;
+        
+        }
+    """
 
     # prepare our fragment-shader
     FRAGMENT_SHADER = """
-           #version 330
-
-            in vec3 newColor;
-            in vec2 OutTexCoords;
-
-            out vec4 outColor;
-            uniform sampler2D samplerTex;
-
-           void main() {
-              outColor = texture(samplerTex, OutTexCoords);
-           }
-       """
+        #version 330
+        
+        in vec3 newColor;
+        in vec2 OutTexCoords;
+        
+        out vec4 outColor;
+        uniform sampler2D samplerTex;
+        
+        void main() {
+            outColor = texture(samplerTex, OutTexCoords);
+        }
+    """
 
     # Compile The Program and shaders
     shader = OpenGL.GL.shaders.compileProgram(OpenGL.GL.shaders.compileShader(VERTEX_SHADER, GL_VERTEX_SHADER),
@@ -346,7 +363,7 @@ def main():
     # Creating Projection Matrix
     n = 0.01
     f = 100.0
-    fov = 90.0
+    fov = 80.0
 
     # create perspective project
     perspective, perspectiveTest = createPerspMatrix(fov, _aspect, n, f)
@@ -378,14 +395,6 @@ def main():
     print("Log: screen \n", screen)
 
     original_v = Vector4([0.5, 0.5, 0.5, 1])
-    # view - 0.0, 0.0, -2
-    # proj - 80 1.0 0.1 100
-    # mode - 0.0, 0.0, 0.0
-    #
-    # 0.5: 180/300  0.5958  // pixel ratio
-    # 1.0:          1.1917
-    # Modify view will not effect the clip cause the geometry is already in the box with size [-1,-1,-1]~[1,1,1]
-    # and only has that it's whether we see it, not whether it's clipped
 
     mvp_matrix = projection * view * model
     _x = original_v.x
@@ -406,8 +415,8 @@ def main():
     print("Log: M Result \n", model * original_v)
     print("Log: MV Result \n", view * model * original_v)
     print("Log: MVP Result \n", projection * view * model * original_v)  # mvp-result must be same as clip-result
-    print("Log: NDC (divide by w) \n", ndc_v)
-    print("Log: Screen \n", screen * ndc_v)
+    print("Log: NDC (divide by w) Result \n", ndc_v)
+    print("Log: Screen Result \n", screen * ndc_v)
     print("Log: -----")
     # ---------------------------------------------------------------------------
 
@@ -421,8 +430,10 @@ def main():
     glUniformMatrix4fv(model_loc, 1, GL_FALSE, model)
 
     while not glfw.window_should_close(window):
+        # handle pending events
         glfw.poll_events()
 
+        # clear buffer
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         rot_x = pyrr.Matrix44.from_x_rotation(0.05 * glfw.get_time())
