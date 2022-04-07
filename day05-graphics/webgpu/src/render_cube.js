@@ -25,7 +25,8 @@ var basicVertWGSL =
           var output : VertexOutput;
           output.Position = uniforms.modelViewProjectionMatrix * position;
           output.fragUV = uv;
-          output.fragPosition = 0.5 * (position + vec4<f32>(1.0, 1.0, 1.0, 1.0));
+          output.fragPosition = 0.5 * (position + vec4<f32>(1.0, 1.0, 1.0, 1.0));  // correct
+          //output.fragPosition = position;
           return output;
         }
     `;
@@ -209,24 +210,23 @@ var sampleTextureMixColorWGSL =
 
     const aspect = presentationSize[0] / presentationSize[1];
     const projectionMatrix = mat4.create();
-    mat4.perspective(projectionMatrix, (2 * Math.PI) / 5, aspect, 0.01, 100.0);
+    mat4.perspective(projectionMatrix, (Math.PI / 2), aspect, 0.01, 100.0);  // 90' = Pi/2
 
     function getTransformationMatrix() {
         const viewMatrix = mat4.create();
-        mat4.translate(viewMatrix, viewMatrix, vec3.fromValues(0, 0, -4));
+        mat4.translate(viewMatrix, viewMatrix, vec3.fromValues(0, 0, -1.0));
         const now = Date.now() / 1000;
         mat4.rotate(
             viewMatrix,
             viewMatrix,
-            1,
+            3.1415926535 * 1.0,
             //vec3.fromValues(Math.sin(now), Math.cos(now), 0)
-            vec3.fromValues(1,1,0)
+            vec3.fromValues(0,1,0)
         );
-        mat4.scale(viewMatrix, viewMatrix, vec3.fromValues(1.25,1.25,1.25));
+        mat4.scale(viewMatrix, viewMatrix, vec3.fromValues(0.5,0.5,0.5));
 
         const modelViewProjectionMatrix = mat4.create();
         mat4.multiply(modelViewProjectionMatrix, projectionMatrix, viewMatrix);
-
         return modelViewProjectionMatrix;
     }
 

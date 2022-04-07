@@ -363,7 +363,7 @@ def main():
     # Creating Projection Matrix
     n = 0.01
     f = 100.0
-    fov = 80.0
+    fov = 90.0
 
     # create perspective project
     perspective, perspectiveTest = createPerspMatrix(fov, _aspect, n, f)
@@ -378,7 +378,7 @@ def main():
     # ---------------------------------------------------------------------------
     # ------------------------------ Our test -----------------------------------
     model = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, 0.0]))
-    view = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, -2.0]))
+    view = Matrix44.from_translation(pyrr.Vector3([0.0, 0.0, -1.0]))
     screen = Matrix44([
         [_width/2.0, 0, 0, _width/2.0],
         [0, _height/2.0, 0, _height/2.0],

@@ -132,12 +132,12 @@ console.log("Log: ", mat4i);
     // 5.2 Filling data (Feed the data into the machine.)
     // The `position` and `color` orders are same as `struct VertexInput`
     new Float32Array(dataBuf.getMappedRange()).set([
-        1.0, -1, 1, 1,  // position
-        1, 0, 0, 1,   // color
-        -1, -1, 0, 1, // position
-        0, 1, 0, 1,   // color
-        0, 1, 0, 1,   // position
-        0, 0, 1, 1,   // color
+        1, -1, 1, 1,  // position (x,y,z,w)   right-down
+            1, 0, 0, 1,   // color (r,g,b,a)
+        -1, -1, 0, 1, // position             left-down
+            0, 1, 0, 1,   // color
+        0, 1, 0, 1,   // position             top-middle
+            0, 0, 1, 1,   // color
     ]);
     // Tell the GPU we're done filling
     dataBuf.unmap();
